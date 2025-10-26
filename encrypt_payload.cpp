@@ -1,63 +1,93 @@
 #include <windows.h>
-#include <stdio.h>
+#include <cstdio>
 #include <vector>
+#include <string>
 #include "config.h"
 #include "encryption.h"
 
+// ensure BYTE is defined (uncomment if needed)
+// typedef unsigned char BYTE;
+
 int main(int argc, char* argv[]) {
-    printf("========================================\n");
-    printf("  Advanced Payload Encryption Tool\n");
-    printf("========================================\n\n");
-    
+    std::printf("========================================\n");
+    std::printf("  Advanced Payload Encryption Tool\n");
+    std::printf("========================================\n\n");
+
     if (argc != 3) {
-        printf("Usage: %s <input_file> <output_file>\n", argv[0]);
-        printf("Example: %s out.exe encrypted_payload.bin\n", argv[0]);
+        std::printf("Usage: %s <input_file> <output_file>\n", argv[0]);
+        std::printf("Example: %s out.exe encrypted_payload.bin\n", argv[0]);
         return 1;
     }
-    
+
     // Read input file
-    FILE* fin = fopen(argv[1], "rb");
+    FILE* fin = std::fopen(argv[1], "rb");
     if (!fin) {
-        printf("[-] Cannot open input file: %s\n", argv[1]);
+        std::printf("[-] Cannot open input file: %s\n", argv[1]);
         return 1;
     }
-    
-    fseek(fin, 0, SEEK_END);
-    size_t fileSize = ftell(fin);
-    fseek(fin, 0, SEEK_SET);
-    
-    std::vector<BYTE> fileData(fileSize);
-    fread(fileData.data(), 1, fileSize, fin);
-    fclose(fin);
-    
-    printf("[*] Loaded file: %zu bytes\n", fileSize);
-    
+
+    std::fseek(fin, 0, SEEK_END);
+    long ftellSize = ftell(fin);
+    if (ftellSize < 0) {
+        std::printf("[-] ftell failed\n");
+        std::fclose(fin);
+        return 1;
+    }
+    size_t fileSize = static_cast<size_t>(ftellSize);
+    std::fseek(fin, 0, SEEK_SET);
+
+    std::vector<BYTE> fileData;
+    fileData.resize(fileSize);
+
+    if (fileSize > 0) {
+        size_t read = std::fread(fileData.data(), 1, fileSize, fin);
+        if (read != fileSize) {
+            std::printf("[-] Read error: expected %llu bytes, got %llu bytes\n",
+                        static_cast<unsigned long long>(fileSize),
+                        static_cast<unsigned long long>(read));
+            std::fclose(fin);
+            return 1;
+        }
+    }
+    std::fclose(fin);
+
+    std::printf("[*] Loaded file: %llu bytes\n", static_cast<unsigned long long>(fileSize));
+
     // Get decryption key
     std::string key = GetDecryptedKey();
-    printf("[*] Using obfuscated key\n");
-    
+    std::printf("[*] Using obfuscated key\n");
+
     // Encrypt with multi-layer encryption
-    printf("[*] Encrypting with AES-256 + XOR...\n");
+    std::printf("[*] Encrypting with AES-256 + XOR...\n");
+
+    // Make sure Encrypt signature matches (example: returns vector<BYTE>)
     std::vector<BYTE> encrypted = MultiLayerEncryption::Encrypt(fileData, key);
-    
+
     if (encrypted.empty()) {
-        printf("[-] Encryption failed\n");
+        std::printf("[-] Encryption failed\n");
         return 1;
     }
-    
+
     // Write output
-    FILE* fout = fopen(argv[2], "wb");
+    FILE* fout = std::fopen(argv[2], "wb");
     if (!fout) {
-        printf("[-] Cannot create output file: %s\n", argv[2]);
+        std::printf("[-] Cannot create output file: %s\n", argv[2]);
         return 1;
     }
-    
-    fwrite(encrypted.data(), 1, encrypted.size(), fout);
-    fclose(fout);
-    
-    printf("[+] Successfully encrypted %zu bytes\n", fileSize);
-    printf("[+] Output: %zu bytes (with padding)\n", encrypted.size());
-    printf("[+] Saved to: %s\n", argv[2]);
-    
+
+    size_t wrote = std::fwrite(encrypted.data(), 1, encrypted.size(), fout);
+    std::fclose(fout);
+
+    if (wrote != encrypted.size()) {
+        std::printf("[-] Write error: wrote %llu of %llu bytes\n",
+                    static_cast<unsigned long long>(wrote),
+                    static_cast<unsigned long long>(encrypted.size()));
+        return 1;
+    }
+
+    std::printf("[+] Successfully encrypted %llu bytes\n", static_cast<unsigned long long>(fileSize));
+    std::printf("[+] Output: %llu bytes (with padding)\n", static_cast<unsigned long long>(encrypted.size()));
+    std::printf("[+] Saved to: %s\n", argv[2]);
+
     return 0;
 }
